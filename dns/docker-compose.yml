@@ -1,0 +1,17 @@
+services:
+  dns:
+    image: coredns/coredns:latest
+    ports:
+      - "15353:53/udp"
+      - "15353:53/tcp"
+    volumes:
+      - ./dns/Corefile:/Corefile:ro
+      - ./dns/zones:/zones:ro
+  web-app1:
+    image: nginx:latest
+    volumes:
+      - ./sites/app1:/usr/share/nginx/html:ro
+  web-app2:
+    image: nginx:latest
+    volumes:
+      - ./sites/app2:/usr/share/nginx/html:ro
