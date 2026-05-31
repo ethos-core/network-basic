@@ -1,0 +1,20 @@
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - "8080:80"
+    volumes:
+      - ./www:/usr/share/nginx/html:ro
+    networks:
+      - capture-network
+  client:
+    image: alpine/curl:latest
+    depends_on:
+      - web
+    networks:
+      - capture-network
+    entrypoint: ["sleep", "infinity"]
+
+networks:
+  capture-network:
+    driver: bridge
