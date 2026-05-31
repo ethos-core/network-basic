@@ -1,0 +1,8 @@
+services:
+  web-h2:
+    image: nginx:latest
+    ports:
+      - "8443:443"
+    volumes:
+      - ./nginx-h2.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
