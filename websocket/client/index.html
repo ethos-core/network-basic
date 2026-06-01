@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>WebSocket Lab</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+    #messages { border: 1px solid #ccc; padding: 1rem; height: 300px; overflow-y: auto; margin-bottom: 1rem; }
+    .system { color: #888; font-style: italic; }
+    .message { margin: 0.5rem 0; }
+    .user-name { font-weight: bold; color: #3498db; }
+    #status { padding: 0.5rem; margin-bottom: 1rem; border-radius: 4px; }
+    .connected { background: #d4edda; color: #155724; }
+    .disconnected { background: #f8d7da; color: #721c24; }
+    form { display: flex; gap: 0.5rem; }
+    input[type="text"] { flex: 1; padding: 0.5rem; font-size: 1rem; }
+    button { padding: 0.5rem 1rem; cursor: pointer; }
+    .image-msg img { max-width: 300px; max-height: 200px; border-radius: 4px; margin-top: 0.25rem; display: block; }
+    .file-row { margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>WebSocket Lab</h1>
+  <div id="status" class="disconnected">切断中</div>
+
+  <div>
+    <label>ユーザー名: <input type="text" id="username" value="User1"></label>
+  </div>
+  <br>
+
+  <div id="messages"></div>
+
+  <form id="form">
+    <input type="text" id="input" placeholder="メッセージを入力..." autocomplete="off">
+    <button type="submit">送信</button>
+  </form>
+  <div class="file-row">
+    <input type="file" id="fileInput" accept="image/*">
+  </div>
+
+  <script>
+    const messagesEl = document.getElementById("messages");
+    const statusEl = document.getElementById("status");
+    const form = document.getElementById("form");
+    const input = document.getElementById("input");
+    const usernameInput = document.getElementById("username");
+
+    let ws;
+
+    function connect() {
+      ws = new WebSocket(`ws://${location.host}`);
+
+      ws.onopen = () => {
+        statusEl.textContent = "接続中";
+        statusEl.className = "connected";
+        console.log("WebSocket connected");
+      };
+
+      let pendingImageMeta = null;
+
+      ws.onmessage = (event) => {
+        const div = document.createElement("div");
+        div.className = "message";
+
+        if (event.data instanceof Blob) {
+          const img = document.createElement("img");
+          const url = URL.createObjectURL(event.data);
+          img.src = url;
+          img.onload = () => URL.revokeObjectURL(url);
+          div.className = "message image-msg";
+          if (pendingImageMeta) {
+            const time = new Date(pendingImageMeta.timestamp).toLocaleTimeString();
+            div.innerHTML =
+              `<span class="user-name">${pendingImageMeta.user}</span> ` +
+              `<small>(${time})</small>: 画像を送信`;
+            pendingImageMeta = null;
+          }
+          div.appendChild(img);
+        } else {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "image-meta") {
+            pendingImageMeta = data;
+            return;
+          } else if (data.type === "system") {
+            div.className = "message system";
+            div.textContent = data.message;
+          } else {
+            const time = new Date(data.timestamp).toLocaleTimeString();
+            div.innerHTML =
+              `<span class="user-name">${data.user}</span> ` +
+              `<small>(${time})</small>: ${data.text}`;
+          }
+        }
+
+        messagesEl.appendChild(div);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      };
+
+      ws.onclose = () => {
+        statusEl.textContent = "切断 — 3秒後に再接続...";
+        statusEl.className = "disconnected";
+        setTimeout(connect, 3000);
+      };
+
+      ws.onerror = (err) => {
+        console.error("WebSocket error:", err);
+      };
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text || ws.readyState !== WebSocket.OPEN) return;
+
+      ws.send(JSON.stringify({
+        type: "message",
+        user: usernameInput.value || "Anonymous",
+        text: text,
+      }));
+      input.value = "";
+    });
+
+    const fileInput = document.getElementById("fileInput");
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file || ws.readyState !== WebSocket.OPEN) return;
+
+      ws.send(JSON.stringify({
+        type: "image-meta",
+        user: usernameInput.value || "Anonymous",
+      }));
+
+      const reader = new FileReader();
+      reader.onload = () => ws.send(reader.result);
+      reader.readAsArrayBuffer(file);
+      fileInput.value = "";
+    });
+
+    connect();
+  </script>
+</body>
+</html>

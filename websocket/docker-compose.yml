@@ -1,0 +1,10 @@
+services:
+  ws-server:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./server:/app
+      - ./client:/client
+    ports:
+      - "3001:3001"
+    command: sh -c "npm install && node server.js"
