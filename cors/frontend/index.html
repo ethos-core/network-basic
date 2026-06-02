@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>CORS Lab</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    .experiment { border: 1px solid #ddd; padding: 1rem; margin: 1rem 0; border-radius: 8px; }
+    .experiment h3 { margin-top: 0; }
+    button { padding: 0.5rem 1rem; margin: 0.25rem; cursor: pointer; }
+    pre { background: #f5f5f5; padding: 1rem; overflow-x: auto; font-size: 0.875rem; }
+    .success { color: #155724; background: #d4edda; padding: 0.5rem; border-radius: 4px; }
+    .error { color: #721c24; background: #f8d7da; padding: 0.5rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>CORS 実験ラボ</h1>
+  <p>このページは <code>http://localhost:8080</code> で配信されています。</p>
+  <p>API サーバーは <code>http://localhost:3000</code> で動いています（異なるオリジン）。</p>
+
+  <div class="experiment">
+    <h3>実験1: CORSヘッダーなし（ブロックされる）</h3>
+    <button onclick="fetchData('http://localhost:3000/api/data')">
+      CORSなしでリクエスト
+    </button>
+    <pre id="result1">結果がここに表示されます</pre>
+  </div>
+
+  <div class="experiment">
+    <h3>実験2: Access-Control-Allow-Origin: *（許可される）</h3>
+    <button onclick="fetchData('http://localhost:3000/api/data?cors=open', 'result2')">
+      ワイルドカードCORSでリクエスト
+    </button>
+    <pre id="result2">結果がここに表示されます</pre>
+  </div>
+
+  <div class="experiment">
+    <h3>実験3: 特定オリジンのみ許可</h3>
+    <button onclick="fetchData('http://localhost:3000/api/data?cors=specific', 'result3')">
+      特定オリジンCORSでリクエスト
+    </button>
+    <pre id="result3">結果がここに表示されます</pre>
+  </div>
+
+  <div class="experiment">
+    <h3>実験6: Access-Control-Expose-Headers（X-Request-Id の取得）</h3>
+    <button onclick="fetchExposeHeaders()">
+      X-Request-Id を取得（Expose なし）
+    </button>
+    <button onclick="fetchExposeHeadersFixed()">
+      X-Request-Id を取得（Expose あり）
+    </button>
+    <pre id="result6">結果がここに表示されます</pre>
+  </div>
+
+  <div class="experiment">
+    <h3>実験7: CORS プロキシ（Nginx経由で同一オリジン化）</h3>
+    <button onclick="fetchViaProxy()">
+      プロキシ経由でリクエスト（CORSヘッダー不要）
+    </button>
+    <button onclick="fetchDirectNoCors()">
+      直接リクエスト（CORSヘッダーなし → エラー）
+    </button>
+    <pre id="result7">結果がここに表示されます</pre>
+  </div>
+
+  <div class="experiment">
+    <h3>実験4: プリフライトリクエスト（カスタムヘッダー付き）</h3>
+    <button onclick="fetchWithCustomHeaders()">
+      カスタムヘッダー付きリクエスト
+    </button>
+    <pre id="result4">結果がここに表示されます</pre>
+  </div>
+
+  <div class="experiment">
+    <h3>実験5: 認証情報付きリクエスト（credentials）</h3>
+    <button onclick="fetchWithCredentials()">
+      認証情報付きリクエスト
+    </button>
+    <pre id="result5">結果がここに表示されます</pre>
+  </div>
+
+  <script>
+    async function fetchData(url, resultId = "result1") {
+      const el = document.getElementById(resultId);
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        el.textContent = JSON.stringify(data, null, 2);
+        el.className = "success";
+      } catch (err) {
+        el.textContent = `エラー: ${err.message}\n\n→ ブラウザのDevToolsのConsoleを確認してください`;
+        el.className = "error";
+      }
+    }
+
+    async function fetchViaProxy() {
+      const el = document.getElementById("result7");
+      try {
+        const res = await fetch("/proxy/api/data");
+        const requestId = res.headers.get("X-Request-Id");
+        const data = await res.json();
+        el.textContent =
+          `■ プロキシ経由（同一オリジン）→ CORSヘッダー不要で成功！\n\n` +
+          `  URL: /proxy/api/data (= http://localhost:8080/proxy/api/data)\n` +
+          `  X-Request-Id: ${requestId}\n` +
+          `  → 同一オリジンなので Expose-Headers なしでも読める！\n\n` +
+          `■ レスポンス:\n${JSON.stringify(data, null, 2)}`;
+        el.className = "success";
+      } catch (err) {
+        el.textContent = `エラー: ${err.message}`;
+        el.className = "error";
+      }
+    }
+
+    async function fetchDirectNoCors() {
+      const el = document.getElementById("result7");
+      try {
+        const res = await fetch("http://localhost:3000/api/data");
+        const data = await res.json();
+        el.textContent = JSON.stringify(data, null, 2);
+        el.className = "success";
+      } catch (err) {
+        el.textContent =
+          `■ 直接リクエスト（CORSヘッダーなし）→ ブロック！\n\n` +
+          `  エラー: ${err.message}\n\n` +
+          `  → Access-Control-Allow-Origin がないため\n` +
+          `    ブラウザがレスポンスの読み取りを拒否`;
+        el.className = "error";
+      }
+    }
+
+    async function fetchExposeHeaders() {
+      const el = document.getElementById("result6");
+      try {
+        const res = await fetch("http://localhost:3000/api/data?cors=open");
+        const requestId = res.headers.get("X-Request-Id");
+        const contentType = res.headers.get("Content-Type");
+        const data = await res.json();
+        el.textContent =
+          `■ レスポンスヘッダーの取得結果:\n` +
+          `  Content-Type: ${contentType}\n` +
+          `  X-Request-Id: ${requestId}\n\n` +
+          `→ X-Request-Id が null = Access-Control-Expose-Headers がないため\n` +
+          `  ブラウザが非セーフリストヘッダーの読み取りをブロックしている\n\n` +
+          `■ レスポンスボディ:\n${JSON.stringify(data, null, 2)}`;
+        el.className = requestId ? "success" : "error";
+      } catch (err) {
+        el.textContent = `エラー: ${err.message}`;
+        el.className = "error";
+      }
+    }
+
+    async function fetchExposeHeadersFixed() {
+      const el = document.getElementById("result6");
+      try {
+        const res = await fetch("http://localhost:3000/api/data?cors=open&expose=true");
+        const requestId = res.headers.get("X-Request-Id");
+        const contentType = res.headers.get("Content-Type");
+        const data = await res.json();
+        el.textContent =
+          `■ レスポンスヘッダーの取得結果:\n` +
+          `  Content-Type: ${contentType}\n` +
+          `  X-Request-Id: ${requestId}\n\n` +
+          `→ Access-Control-Expose-Headers を追加したので取得できる！\n\n` +
+          `■ レスポンスボディ:\n${JSON.stringify(data, null, 2)}`;
+        el.className = requestId ? "success" : "error";
+      } catch (err) {
+        el.textContent = `エラー: ${err.message}`;
+        el.className = "error";
+      }
+    }
+
+    async function fetchWithCustomHeaders() {
+      const el = document.getElementById("result4");
+      try {
+        const res = await fetch("http://localhost:3000/api/data?cors=open", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Custom-Header": "custom-value",
+            "Authorization": "Bearer test-token",
+          },
+          body: JSON.stringify({ data: "test" }),
+        });
+        const data = await res.json();
+        el.textContent = "プリフライト(OPTIONS) + 本リクエスト(POST) 成功:\n\n" +
+          JSON.stringify(data, null, 2);
+        el.className = "success";
+      } catch (err) {
+        el.textContent = `エラー: ${err.message}\n\nDevToolsのNetworkタブでOPTIONSリクエストを確認してください`;
+        el.className = "error";
+      }
+    }
+
+    async function fetchWithCredentials() {
+      const el = document.getElementById("result5");
+      try {
+        const res = await fetch("http://localhost:3000/api/data?cors=credentials", {
+          credentials: "include",
+        });
+        const data = await res.json();
+        el.textContent = JSON.stringify(data, null, 2);
+        el.className = "success";
+      } catch (err) {
+        el.textContent = `エラー: ${err.message}\n\ncredentials: "include" には\nAccess-Control-Allow-Credentials: true が必要`;
+        el.className = "error";
+      }
+    }
+  </script>
+</body>
+</html>
